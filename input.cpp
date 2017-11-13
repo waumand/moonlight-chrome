@@ -8,6 +8,8 @@
 
 #define KEY_PREFIX 0x80
 
+#define ERRANT_EVENT_THRESHOLD 50
+
 static int ConvertPPButtonToLiButton(PP_InputEvent_MouseButton ppButton) {
     switch (ppButton) {
         case PP_INPUTEVENT_MOUSEBUTTON_LEFT:
@@ -143,11 +145,64 @@ bool MoonlightInstance::HandleInputEvent(const pp::InputEvent& event) {
             
             pp::MouseInputEvent mouseEvent(event);
             pp::Point posDelta = mouseEvent.GetMovement();
+
+            // The following is a hack for a bug in Chrome that causes
+            // errant pointer events when the cursor is re-centered
+            // on Windows 10 Fall Creators Update (RS3).
+
+            if (abs(posDelta.x()) >= ERRANT_EVENT_THRESHOLD) {
+                // This event is over the threshold, but let's see
+                // if it's inconsistent with the last valid reported
+                // event direction.
+                if (posDelta.x() < 0 && m_MouseDirX > 0) {
+                    printf("Discarding errant mouse event %d:%d\n", posDelta.x(), posDelta.y());
+                    return true;
+                }
+                else if (posDelta.x() > 0 && m_MouseDirX < 0) {
+                    printf("Discarding errant mouse event %d:%d\n", posDelta.x(), posDelta.y());
+                    return true;
+                }
+            }
+
+            if (abs(posDelta.y()) >= ERRANT_EVENT_THRESHOLD) {
+                // This event is over the threshold, but let's see
+                // if it's inconsistent with the last valid reported
+                // event direction.
+                if (posDelta.y() < 0 && m_MouseDirY > 0) {
+                    printf("Discarding errant mouse event %d:%d\n", posDelta.x(), posDelta.y());
+                    return true;
+                }
+                else if (posDelta.y() > 0 && m_MouseDirY < 0) {
+                    printf("Discarding errant mouse event %d:%d\n", posDelta.x(), posDelta.y());
+                    return true;
+                }
+            }
             
             // Wait to report mouse movement until the next input polling window
             // to allow batching to occur which reduces overall input lag.
             m_MouseDeltaX += posDelta.x();
             m_MouseDeltaY += posDelta.y();
+
+            if (posDelta.x() < 0) {
+                m_MouseDirX = -1;
+            }
+            else if (posDelta.x() > 0) {
+                m_MouseDirX = 1;
+            }
+            else {
+                m_MouseDirX = 0;
+            }
+
+            if (posDelta.y() < 0) {
+                m_MouseDirY = -1;
+            }
+            else if (posDelta.y() > 0) {
+                m_MouseDirY = 1;
+            }
+            else {
+                m_MouseDirY = 0;
+            }
+
             return true;
         }
         
